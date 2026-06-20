@@ -34,7 +34,19 @@ export function createInboundCallHandler(config: Config): RequestHandler {
     try {
       const response = new VoiceResponse();
       const connect = response.connect();
-      connect.stream({ url: buildStreamUrl(config.publicBaseUrl) });
+      const stream = connect.stream({ url: buildStreamUrl(config.publicBaseUrl) });
+
+      // Pass the caller's number (and the number they dialled) into the Media
+      // Stream so the websocket handler can text the result SMS afterwards.
+      // Twilio surfaces these in the stream's `start.customParameters`.
+      const caller = req.body?.From;
+      const called = req.body?.To;
+      if (caller) {
+        stream.parameter({ name: 'caller', value: caller });
+      }
+      if (called) {
+        stream.parameter({ name: 'called', value: called });
+      }
 
       res.type('text/xml').send(response.toString());
       console.log(`[voice] Inbound call connected to Media Stream (CallSid: ${callSid})`);

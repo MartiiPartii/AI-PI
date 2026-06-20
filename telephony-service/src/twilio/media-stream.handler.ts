@@ -7,6 +7,7 @@ import { generateBeepFrames } from '../audio/beep.js';
 import { saveRecording } from '../audio/recording.js';
 import { frameRms } from '../audio/mulaw.js';
 import { scorePhonation } from '../model/risk-client.js';
+import { sendResultSms } from './sms.js';
 
 /** Path Twilio's <Connect><Stream> connects to for bidirectional media. */
 export const MEDIA_STREAM_PATH = '/media-stream';
@@ -70,6 +71,10 @@ function handleConnection(twilioWs: WebSocket, config: Config): void {
   // callSid identifies the call itself, needed to end it via the REST API.
   let streamSid: string | null = null;
   let callSid: string | null = null;
+  // Caller's number and the number they dialled, passed in as Media Stream
+  // parameters (see voice.controller). Used to text the result afterwards.
+  let callerNumber: string | null = null;
+  let dialledNumber: string | null = null;
 
   // Phonation-capture state. The capture runs as a small phase machine:
   //   idle      → not capturing; caller audio flows to the model as normal.
@@ -192,7 +197,14 @@ function handleConnection(twilioWs: WebSocket, config: Config): void {
 
     try {
       const assessment = await scorePhonation(audio, config);
+      // Hand the result to the agent so it states it in the call, then text the
+      // caller their result in parallel. The SMS is fire-and-forget: it must not
+      // delay the spoken result or break the call if it fails.
       realtime.submitToolResult(callId, assessment);
+      console.log(
+        `[capture] Assessment done (risk ${assessment.riskPercent}%); attempting result SMS to ${callerNumber ?? '(none)'}`,
+      );
+      void sendResultSms(config, assessment, callerNumber, dialledNumber);
     } catch (error) {
       console.error('[capture] Scoring failed:', error);
       realtime.submitToolResult(callId, { error: 'scoring_failed' });
@@ -242,7 +254,11 @@ function handleConnection(twilioWs: WebSocket, config: Config): void {
   twilioWs.on('message', (raw) => {
     let msg: {
       event?: string;
-      start?: { streamSid?: string; callSid?: string };
+      start?: {
+        streamSid?: string;
+        callSid?: string;
+        customParameters?: { caller?: string; called?: string };
+      };
       media?: { payload?: string };
       mark?: { name?: string };
     };
@@ -256,7 +272,12 @@ function handleConnection(twilioWs: WebSocket, config: Config): void {
       case 'start':
         streamSid = msg.start?.streamSid ?? null;
         callSid = msg.start?.callSid ?? null;
+        callerNumber = msg.start?.customParameters?.caller ?? null;
+        dialledNumber = msg.start?.customParameters?.called ?? null;
         console.log(`[media] Stream started (streamSid: ${streamSid}, callSid: ${callSid})`);
+        console.log(
+          `[media] Call numbers from Twilio params — caller: ${callerNumber ?? '(none)'}, dialled: ${dialledNumber ?? '(none)'}`,
+        );
         break;
       case 'media':
         if (msg.media?.payload) {
