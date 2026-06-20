@@ -1,0 +1,112 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+/* Tailwind CSS v4: a single import replaces the v3 @tailwind directives. */
+@import 'tailwindcss';
+/* Keep the existing JS theme/design tokens (colors, radius, animations) by
+   loading the legacy config, so the migration preserves the current design. */
+@config '../tailwind.config.ts';
+
+@layer base {
+  :root {
+    --background: 216 33% 97%;
+    --foreground: 212 30% 17%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 212 30% 17%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 212 30% 17%;
+
+    --primary: 221 60% 45%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 216 33% 97%;
+    --secondary-foreground: 212 30% 17%;
+
+    --muted: 216 20% 93%;
+    --muted-foreground: 215 16% 47%;
+
+    --accent: 174 63% 45%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 1 79% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 123 41% 45%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 36 100% 65%;
+    --warning-foreground: 212 30% 17%;
+
+    --navy: 212 30% 17%;
+    --navy-foreground: 0 0% 100%;
+
+    --border: 216 20% 90%;
+    --input: 216 20% 90%;
+    --ring: 221 60% 45%;
+
+    --radius: 0.625rem;
+
+    --sidebar-background: 212 30% 17%;
+    --sidebar-foreground: 216 20% 90%;
+    --sidebar-primary: 174 63% 45%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 212 28% 22%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 212 28% 25%;
+    --sidebar-ring: 174 63% 45%;
+    --sidebar-muted: 212 20% 35%;
+  }
+
+  .dark {
+    --background: 212 30% 10%;
+    --foreground: 216 33% 97%;
+    --card: 212 30% 14%;
+    --card-foreground: 216 33% 97%;
+    --popover: 212 30% 14%;
+    --popover-foreground: 216 33% 97%;
+    --primary: 221 60% 55%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 212 28% 20%;
+    --secondary-foreground: 216 33% 97%;
+    --muted: 212 28% 18%;
+    --muted-foreground: 215 16% 60%;
+    --accent: 174 63% 45%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 1 79% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 212 28% 22%;
+    --input: 212 28% 22%;
+    --ring: 221 60% 55%;
+    --sidebar-background: 212 30% 8%;
+    --sidebar-foreground: 216 20% 90%;
+    --sidebar-primary: 174 63% 45%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 212 28% 15%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 212 28% 18%;
+    --sidebar-ring: 174 63% 45%;
+    --sidebar-muted: 212 20% 30%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+}
+
+@layer utilities {
+  .card-hover {
+    @apply transition-all duration-200 ease-in-out;
+  }
+  .card-hover:hover {
+    @apply shadow-lg -translate-y-0.5;
+  }
+}
+
