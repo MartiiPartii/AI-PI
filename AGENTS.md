@@ -45,7 +45,10 @@ These services communicate over internal APIs and share a database for storing u
 
 - **Real-time, in-call results.** The voice sample must be analysed *during the call* so the AI agent can tell the caller their risk result before hanging up (not only via the after-call SMS). This requires streaming the caller's audio to the model in near real time rather than waiting for a finished recording.
 - **Target audience: non-technical and elderly callers.** The conversation must be patient, simple, and forgiving. The agent must handle callers who: ask it to repeat itself, don't understand the instructions, or say words/something other than the requested sustained vowel ("ahhh"). In those cases the agent must gently re-explain and let them try again, rather than failing the call.
-- The telephony service therefore runs a conversational voice agent (speech-to-text + LLM dialogue + text-to-speech) over Twilio Media Streams, with the raw phonation audio captured in parallel for the model.
+- The telephony service runs a conversational voice agent over **Twilio Media Streams** (raw bidirectional audio). The conversation is driven by **OpenAI's GPT Realtime speech-to-speech API**: Twilio streams the caller's audio (8 kHz G.711 μ-law) to the Node.js server, which relays it over a WebSocket to the Realtime model and streams the model's audio responses back to the caller. This is chosen over a text-LLM-behind-ConversationRelay design to maximise conversational naturalness for elderly, non-technical callers.
+- Because the server already terminates the raw audio stream, the caller's sustained-vowel ("ahhh") phonation is captured by teeing a copy of the inbound audio into a buffer, which is then sent to the FastAPI model service for scoring during the call.
+- Requires an **OpenAI API key** for the Realtime API (in addition to the Twilio credentials).
+- **Multilingual, Bulgarian by default.** The agent speaks Bulgarian on every new call. If a caller asks it to switch to another language (or addresses it in another language and asks), it switches and continues in that language for the rest of the call. This is driven by the agent's system instructions.
 
 ## Design Notes
 

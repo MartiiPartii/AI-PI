@@ -1,33 +1,46 @@
-import type { Request, Response } from 'express';
+import type { Request, RequestHandler, Response } from 'express';
 import twilio from 'twilio';
+import type { Config } from '../config.js';
+import { MEDIA_STREAM_PATH } from './media-stream.handler.js';
 
 const { VoiceResponse } = twilio.twiml;
 
 /**
- * The single spoken line for this milestone. Kept as a constant so the eventual
- * conversation flow can replace it with a richer, model-driven script without
- * touching the HTTP wiring.
+ * Derives the public `wss://` URL Twilio should open a Media Stream to, from the
+ * configured public base URL (e.g. `https://x.ngrok-free.app` → `wss://x.ngrok-free.app/media-stream`).
  */
-const GREETING = `Hello. This is AI-PI. Parkinson's is the second most common neurodegenerative disease in the world. And here's the nightmarish fact: by the time the doctor finally says the words "you have Parkinson's" — the patient has already lost between 50 and 70 percent of the neurons that produce dopamine. The disease doesn't start on the day of diagnosis. It starts years earlier — quietly, invisibly, in the way we speak. Have a nice day!`;
+function buildStreamUrl(publicBaseUrl: string): string {
+  const base = publicBaseUrl.replace(/^http/, 'ws').replace(/\/$/, '');
+  return `${base}${MEDIA_STREAM_PATH}`;
+}
 
 /**
- * Handles Twilio's inbound-call webhook.
+ * Builds the handler for Twilio's inbound-call webhook.
  *
- * Twilio POSTs to this endpoint when a call comes in and expects TwiML
- * (XML) describing what to do. Here we simply greet the caller and hang up.
+ * Twilio POSTs here when a call comes in and expects TwiML. We respond with
+ * `<Connect><Stream>`, which opens a bidirectional Media Stream to our
+ * WebSocket — that stream is then bridged to the GPT Realtime agent.
  */
-export function handleInboundCall(req: Request, res: Response): void {
-  const callSid = req.body?.CallSid ?? 'unknown';
+export function createInboundCallHandler(config: Config): RequestHandler {
+  return function handleInboundCall(req: Request, res: Response): void {
+    const callSid = req.body?.CallSid ?? 'unknown';
 
-  try {
-    const response = new VoiceResponse();
-    response.say(GREETING);
-    response.hangup();
+    if (!config.publicBaseUrl) {
+      console.error(`[voice] PUBLIC_BASE_URL is not set; cannot start Media Stream (CallSid: ${callSid})`);
+      res.status(500).send('Server misconfigured: PUBLIC_BASE_URL required');
+      return;
+    }
 
-    res.type('text/xml').send(response.toString());
-    console.log(`[voice] Inbound call handled successfully (CallSid: ${callSid})`);
-  } catch (error) {
-    console.error(`[voice] Failed to handle inbound call (CallSid: ${callSid}):`, error);
-    res.status(500).send('Error handling call');
-  }
+    try {
+      const response = new VoiceResponse();
+      const connect = response.connect();
+      connect.stream({ url: buildStreamUrl(config.publicBaseUrl) });
+
+      res.type('text/xml').send(response.toString());
+      console.log(`[voice] Inbound call connected to Media Stream (CallSid: ${callSid})`);
+    } catch (error) {
+      console.error(`[voice] Failed to handle inbound call (CallSid: ${callSid}):`, error);
+      res.status(500).send('Error handling call');
+    }
+  };
 }

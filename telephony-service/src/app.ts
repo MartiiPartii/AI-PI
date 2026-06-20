@@ -1,6 +1,6 @@
 import express, { type Express } from 'express';
 import type { Config } from './config.js';
-import { handleInboundCall } from './twilio/voice.controller.js';
+import { createInboundCallHandler } from './twilio/voice.controller.js';
 import { createSignatureValidator } from './twilio/signature.middleware.js';
 
 /**
@@ -22,7 +22,7 @@ export function createApp(config: Config): Express {
 
   // Twilio Voice inbound-call webhook, guarded by signature validation.
   const validateTwilioSignature = createSignatureValidator(config);
-  app.post('/twilio/voice', validateTwilioSignature, handleInboundCall);
+  app.post('/twilio/voice', validateTwilioSignature, createInboundCallHandler(config));
 
   return app;
 }
