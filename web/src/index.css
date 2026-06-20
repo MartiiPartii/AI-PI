@@ -7,86 +7,71 @@
 @config '../tailwind.config.ts';
 
 @layer base {
+  /*
+   * Brand palette (light theme only). Stored as HSL channel triples so the
+   * shadcn/Tailwind `hsl(var(--token))` system can apply opacity modifiers.
+   *   Surface / Cards  #FFFFFF   Background  #F6F9FB   Borders     #E2E8F0
+   *   Primary          #00CDBC   Secondary   #0B1F2A   Muted text  #64748B
+   *   Main text        #0F172A
+   */
   :root {
-    --background: 216 33% 97%;
-    --foreground: 212 30% 17%;
+    /* Background #F6F9FB / main text #0F172A */
+    --background: 204 38% 97%;
+    --foreground: 222 47% 11%;
 
+    /* Surface / Cards #FFFFFF */
     --card: 0 0% 100%;
-    --card-foreground: 212 30% 17%;
+    --card-foreground: 222 47% 11%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 212 30% 17%;
+    --popover-foreground: 222 47% 11%;
 
-    --primary: 221 60% 45%;
-    --primary-foreground: 0 0% 100%;
+    /* Primary #00CDBC — dark navy text sits on it for AA+ contrast */
+    --primary: 175 100% 40%;
+    --primary-foreground: 201 59% 10%;
 
-    --secondary: 216 33% 97%;
-    --secondary-foreground: 212 30% 17%;
+    /* Secondary #0B1F2A (deep navy), white text */
+    --secondary: 201 59% 10%;
+    --secondary-foreground: 0 0% 100%;
 
-    --muted: 216 20% 93%;
+    /* Muted surface (soft slate) + muted text #64748B */
+    --muted: 210 40% 96%;
     --muted-foreground: 215 16% 47%;
 
-    --accent: 174 63% 45%;
-    --accent-foreground: 0 0% 100%;
+    /* Subtle teal-tinted accent surface for hovers */
+    --accent: 178 64% 95%;
+    --accent-foreground: 201 59% 10%;
 
     --destructive: 1 79% 55%;
     --destructive-foreground: 0 0% 100%;
 
-    --success: 123 41% 45%;
+    --success: 160 84% 39%;
     --success-foreground: 0 0% 100%;
 
     --warning: 36 100% 65%;
-    --warning-foreground: 212 30% 17%;
+    --warning-foreground: 222 47% 11%;
 
-    --navy: 212 30% 17%;
+    /* Secondary navy reused as the brand "navy" token */
+    --navy: 201 59% 10%;
     --navy-foreground: 0 0% 100%;
 
-    --border: 216 20% 90%;
-    --input: 216 20% 90%;
-    --ring: 221 60% 45%;
+    /* Borders / inputs #E2E8F0, focus ring uses the primary teal */
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 175 100% 40%;
 
-    --radius: 0.625rem;
+    /* Generous radius for the soft, rounded Google-keynote feel. */
+    --radius: 1rem;
 
-    --sidebar-background: 212 30% 17%;
-    --sidebar-foreground: 216 20% 90%;
-    --sidebar-primary: 174 63% 45%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 212 28% 22%;
+    --sidebar-background: 201 59% 10%;
+    --sidebar-foreground: 214 32% 91%;
+    --sidebar-primary: 175 100% 40%;
+    --sidebar-primary-foreground: 201 59% 10%;
+    --sidebar-accent: 201 45% 18%;
     --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 212 28% 25%;
-    --sidebar-ring: 174 63% 45%;
-    --sidebar-muted: 212 20% 35%;
-  }
-
-  .dark {
-    --background: 212 30% 10%;
-    --foreground: 216 33% 97%;
-    --card: 212 30% 14%;
-    --card-foreground: 216 33% 97%;
-    --popover: 212 30% 14%;
-    --popover-foreground: 216 33% 97%;
-    --primary: 221 60% 55%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 212 28% 20%;
-    --secondary-foreground: 216 33% 97%;
-    --muted: 212 28% 18%;
-    --muted-foreground: 215 16% 60%;
-    --accent: 174 63% 45%;
-    --accent-foreground: 0 0% 100%;
-    --destructive: 1 79% 55%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 212 28% 22%;
-    --input: 212 28% 22%;
-    --ring: 221 60% 55%;
-    --sidebar-background: 212 30% 8%;
-    --sidebar-foreground: 216 20% 90%;
-    --sidebar-primary: 174 63% 45%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 212 28% 15%;
-    --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 212 28% 18%;
-    --sidebar-ring: 174 63% 45%;
-    --sidebar-muted: 212 20% 30%;
+    --sidebar-border: 201 40% 20%;
+    --sidebar-ring: 175 100% 40%;
+    --sidebar-muted: 201 20% 40%;
   }
 }
 
@@ -107,6 +92,37 @@
   }
   .card-hover:hover {
     @apply shadow-lg -translate-y-0.5;
+  }
+
+  /*
+   * Soft, diffuse elevation for rounded surfaces — the gentle depth of Google
+   * keynote cards, used instead of hard 1px borders.
+   */
+  .soft {
+    box-shadow:
+      0 1px 2px hsl(var(--secondary) / 0.04),
+      0 8px 24px -12px hsl(var(--secondary) / 0.12);
+  }
+
+  /*
+   * Scroll-reveal for the <Reveal> wrapper. Progressive enhancement: the hidden
+   * starting state is applied ONLY when JavaScript is active (`.js` is set on
+   * <html> by an inline script before paint). Without JS the content stays fully
+   * visible, so the page never renders blank and remains usable/crawlable.
+   */
+  .reveal {
+    transition:
+      opacity 0.7s ease-out,
+      transform 0.7s ease-out;
+  }
+  .js .reveal:not(.reveal--in) {
+    opacity: 0;
+    transform: translateY(1rem);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .reveal {
+      transition: none;
+    }
   }
 }
 
