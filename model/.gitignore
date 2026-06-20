@@ -1,0 +1,9 @@
+# Python virtualenv (recreate with: python3 -m venv venv && pip install -r requirements.txt)
+venv/
+
+# Python bytecode caches
+__pycache__/
+*.pyc
+
+# Local tooling
+.claude/
