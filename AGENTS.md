@@ -37,6 +37,16 @@ These services communicate over internal APIs and share a database for storing u
 - **Training data:** Oxford Parkinson's Disease Detection Dataset (Kaggle)
 - **Database:** shared store for user accounts (phone number-linked) and assessment result history
 
+## Development Rules
+
+- **Dependencies must always be installed at their newest, latest stable version.** When adding a dependency, install the latest release (e.g. `npm install <pkg>@latest`); when working in a service, prefer keeping existing dependencies up to date as well. Do not pin to older versions unless a documented incompatibility requires it.
+
+## Experience & Real-Time Requirements
+
+- **Real-time, in-call results.** The voice sample must be analysed *during the call* so the AI agent can tell the caller their risk result before hanging up (not only via the after-call SMS). This requires streaming the caller's audio to the model in near real time rather than waiting for a finished recording.
+- **Target audience: non-technical and elderly callers.** The conversation must be patient, simple, and forgiving. The agent must handle callers who: ask it to repeat itself, don't understand the instructions, or say words/something other than the requested sustained vowel ("ahhh"). In those cases the agent must gently re-explain and let them try again, rather than failing the call.
+- The telephony service therefore runs a conversational voice agent (speech-to-text + LLM dialogue + text-to-speech) over Twilio Media Streams, with the raw phonation audio captured in parallel for the model.
+
 ## Design Notes
 
 - Services are independently deployable, communicating over internal APIs (microservice architecture).
