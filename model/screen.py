@@ -63,7 +63,13 @@ def screen_wav(wav_path, model, features):
     row = pd.DataFrame([feats])[features]
     if row.isnull().any().any():
         return None
-    return float(model.predict_proba(row)[0][1])
+    # classes_ == [0, 1] where class 0 is the Parkinson's class and class 1 is
+    # the healthy/control class — verified empirically: clean voices (low
+    # jitter/shimmer, high HNR) score high on class 1, disordered (PD-like)
+    # voices score low. So Parkinson's RISK is P(class 0), not P(class 1).
+    proba = model.predict_proba(row)[0]
+    pd_index = list(model.classes_).index(0)
+    return float(proba[pd_index])
 
 
 # ── convenience: screen straight from mu-law bytes (Media Streams path)
