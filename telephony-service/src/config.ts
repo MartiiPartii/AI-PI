@@ -36,6 +36,12 @@ export interface Config {
    * the number the caller dialled is used as the sender.
    */
   readonly smsFromNumber: string;
+  /**
+   * Whether the Twilio account is a free trial. Trial accounts prepend a notice
+   * to every SMS and reject messages spanning too many segments (error 30044),
+   * so when true the result SMS is shortened to fit a single UCS-2 segment.
+   */
+  readonly twilioTrialAccount: boolean;
   /** Base URL of the FastAPI model service that scores phonation samples. */
   readonly fastApiUrl: string;
   /** How long (ms) to record the caller's sustained "ahhh" after the beep. */
@@ -106,6 +112,7 @@ export function loadConfig(): Config {
   const agentGreeting = process.env.AGENT_GREETING ?? DEFAULT_AGENT_GREETING;
 
   const smsFromNumber = process.env.TWILIO_SMS_FROM ?? '';
+  const twilioTrialAccount = process.env.TWILIO_TRIAL_ACCOUNT === 'true';
   const fastApiUrl = process.env.FASTAPI_URL ?? 'http://localhost:8000';
 
   const captureDurationMs = Number.parseInt(process.env.CAPTURE_DURATION_MS ?? '5000', 10);
@@ -129,6 +136,7 @@ export function loadConfig(): Config {
     agentInstructions,
     agentGreeting,
     smsFromNumber,
+    twilioTrialAccount,
     fastApiUrl,
     captureDurationMs,
     saveRecordings,

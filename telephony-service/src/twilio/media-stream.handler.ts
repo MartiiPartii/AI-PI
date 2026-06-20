@@ -201,10 +201,16 @@ function handleConnection(twilioWs: WebSocket, config: Config): void {
       // caller their result in parallel. The SMS is fire-and-forget: it must not
       // delay the spoken result or break the call if it fails.
       realtime.submitToolResult(callId, assessment);
-      console.log(
-        `[capture] Assessment done (risk ${assessment.riskPercent}%); attempting result SMS to ${callerNumber ?? '(none)'}`,
-      );
-      void sendResultSms(config, assessment, callerNumber, dialledNumber);
+      // Only text a result on a clear, scored sample. An `unclear` result has no
+      // riskPercent and the agent re-prompts for a retry, so there is nothing to send.
+      if (assessment.status === 'scored') {
+        console.log(
+          `[capture] Assessment done (risk ${assessment.riskPercent}%); attempting result SMS to ${callerNumber ?? '(none)'}`,
+        );
+        void sendResultSms(config, assessment, callerNumber, dialledNumber);
+      } else {
+        console.log('[capture] Result unclear; no SMS, agent will ask for a retry');
+      }
     } catch (error) {
       console.error('[capture] Scoring failed:', error);
       realtime.submitToolResult(callId, { error: 'scoring_failed' });
