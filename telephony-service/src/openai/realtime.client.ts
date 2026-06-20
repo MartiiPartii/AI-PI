@@ -15,6 +15,13 @@ export interface RealtimeCallbacks {
   onSpeechStarted: () => void;
   /** Called when the agent decides the conversation is over and wants to hang up. */
   onEndCall: () => void;
+  /**
+   * Called when the agent invokes begin_voice_capture, i.e. it has finished
+   * instructing the caller and wants us to play the beep and record the
+   * sustained-vowel sample. The `callId` must be passed back to
+   * `submitToolResult` once scoring is done so the agent can speak the result.
+   */
+  onBeginCapture: (callId: string) => void;
   /** Called on a fatal error or when the session closes. */
   onClose: () => void;
 }
@@ -22,6 +29,11 @@ export interface RealtimeCallbacks {
 export interface RealtimeSession {
   /** Forward a base64 G.711 μ-law audio chunk from the caller to the model. */
   sendAudio: (audioBase64: string) => void;
+  /**
+   * Hand the result of a tool call back to the model and prompt it to respond.
+   * Used to deliver the phonation score so the agent can relay it to the caller.
+   */
+  submitToolResult: (callId: string, output: unknown) => void;
   /** Close the Realtime connection. */
   close: () => void;
 }
@@ -120,13 +132,20 @@ export function createRealtimeSession(config: Config, callbacks: RealtimeCallbac
               voice: config.agentVoice,
             },
           },
-          // Tool the agent calls to hang up once the conversation is over.
+          // Tools the agent can call during the conversation.
           tools: [
             {
               type: 'function',
               name: 'end_call',
               description:
                 'End the phone call. Call this only after you have said goodbye to the caller and the conversation is finished.',
+              parameters: { type: 'object', properties: {}, required: [] },
+            },
+            {
+              type: 'function',
+              name: 'begin_voice_capture',
+              description:
+                "Play the start beep and record the caller's sustained \"ahhh\" phonation for scoring. Call this only after the caller has consented, you have explained the test, and they have confirmed they are ready. Do not speak after calling it — the recording is captured automatically and you will receive the risk result to relay.",
               parameters: { type: 'object', properties: {}, required: [] },
             },
           ],
@@ -138,7 +157,14 @@ export function createRealtimeSession(config: Config, callbacks: RealtimeCallbac
   });
 
   ws.on('message', (raw) => {
-    let event: { type?: string; delta?: string; transcript?: string; name?: string; error?: unknown };
+    let event: {
+      type?: string;
+      delta?: string;
+      transcript?: string;
+      name?: string;
+      call_id?: string;
+      error?: unknown;
+    };
     try {
       event = JSON.parse(raw.toString());
     } catch {
@@ -188,10 +214,17 @@ export function createRealtimeSession(config: Config, callbacks: RealtimeCallbac
         // so the server won't act on this by itself either.
         break;
       case 'response.function_call_arguments.done':
-        // The agent invoked a tool. The only tool we expose is end_call.
+        // The agent invoked a tool.
         if (event.name === 'end_call') {
           console.log('[openai] Agent requested end_call');
           callbacks.onEndCall();
+        } else if (event.name === 'begin_voice_capture') {
+          console.log('[openai] Agent requested begin_voice_capture');
+          if (event.call_id) {
+            callbacks.onBeginCapture(event.call_id);
+          } else {
+            console.warn('[openai] begin_voice_capture missing call_id; cannot return result');
+          }
         }
         break;
       case 'conversation.item.input_audio_transcription.completed': {
@@ -240,6 +273,24 @@ export function createRealtimeSession(config: Config, callbacks: RealtimeCallbac
         // Session not ready yet — buffer so the caller's opening words aren't lost.
         pendingAudio.push(audioBase64);
       }
+    },
+    submitToolResult(callId: string, output: unknown): void {
+      if (ws.readyState !== WebSocket.OPEN) {
+        return;
+      }
+      // Append the tool output to the conversation, then ask the model to speak
+      // a response based on it (the agent relays the risk result to the caller).
+      ws.send(
+        JSON.stringify({
+          type: 'conversation.item.create',
+          item: {
+            type: 'function_call_output',
+            call_id: callId,
+            output: JSON.stringify(output),
+          },
+        }),
+      );
+      ws.send(JSON.stringify({ type: 'response.create' }));
     },
     close(): void {
       if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
