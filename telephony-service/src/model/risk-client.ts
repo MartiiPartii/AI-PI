@@ -4,46 +4,75 @@ import type { Config } from '../config.js';
  * Client for the AI model service (FastAPI) that scores a sustained-vowel
  * ("ahhh") phonation sample and returns a Parkinson's disease risk assessment.
  *
- * The real service does not exist yet, so this is a MOCK: it ignores the audio,
- * waits a realistic 1–2 seconds to imitate network + inference latency, and
- * returns a random risk percentage. The function signature and return shape are
- * the contract the real client will keep — when the FastAPI endpoint is ready,
- * only the body below changes (POST `config.fastApiUrl` with the audio), and
- * the rest of the telephony service stays untouched.
+ * The captured audio is raw 8 kHz G.711 μ-law (Twilio's wire format); we POST it
+ * verbatim to the model service, which decodes and scores it at its native rate.
+ * The model returns ONLY a probability — the 0.38 decision threshold and the
+ * spoken phrasing are the app's job (MODEL_INTEGRATION.md), so we apply the
+ * threshold here and hand the agent a deterministic result to relay.
  */
 
-/** Result of scoring a phonation sample. */
-export interface RiskAssessment {
-  /** Parkinson's disease risk as a percentage, 0–100. */
-  readonly riskPercent: number;
-}
+/**
+ * Decision threshold on the model's risk probability. risk ≥ this → elevated.
+ * Tuned to favour recall (catch more true cases). Owned by the app, not the model.
+ */
+const RISK_THRESHOLD = 0.38;
 
-/** Lower/upper bounds (ms) of the simulated model round-trip latency. */
-const MOCK_MIN_DELAY_MS = 1000;
-const MOCK_MAX_DELAY_MS = 2000;
+/** Result of scoring a phonation sample, as handed to the agent to relay. */
+export type RiskAssessment =
+  | {
+      /** A clear sample was scored. */
+      readonly status: 'scored';
+      /** Parkinson's risk as a percentage, 0–100. */
+      readonly riskPercent: number;
+      /** Whether the risk is at/above the decision threshold (app-side decision). */
+      readonly elevated: boolean;
+    }
+  | {
+      /** No clear pitch (silence/noise/not a sustained vowel) — ask the caller to retry. */
+      readonly status: 'unclear';
+    };
+
+/** Shape returned by the FastAPI `/score` endpoint: probability 0..1, or null. */
+interface ScoreResponse {
+  readonly risk: number | null;
+}
 
 /**
  * Sends a captured μ-law phonation sample to the model service for scoring.
  *
  * @param audio  raw G.711 μ-law audio captured during the call (8 kHz)
- * @param config runtime config (holds `fastApiUrl` for the real implementation)
+ * @param config runtime config (holds `fastApiUrl`)
+ * @throws if the model service is unreachable or returns a non-OK status, so the
+ *         caller can fall back to a "try again" prompt.
  */
 export async function scorePhonation(
   audio: Buffer,
   config: Config,
 ): Promise<RiskAssessment> {
-  // TODO: replace this mock with a real call to the FastAPI model service:
-  //   const res = await fetch(`${config.fastApiUrl}/score`, { method: 'POST', body: ... });
-  //   return (await res.json()) as RiskAssessment;
-  void config;
+  const res = await fetch(`${config.fastApiUrl}/score`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/octet-stream' },
+    // Buffer is a Uint8Array; send the raw bytes as the request body.
+    body: new Uint8Array(audio),
+  });
 
-  const delayMs = MOCK_MIN_DELAY_MS + Math.random() * (MOCK_MAX_DELAY_MS - MOCK_MIN_DELAY_MS);
-  await new Promise((resolve) => setTimeout(resolve, delayMs));
+  if (!res.ok) {
+    throw new Error(`Model service responded ${res.status} ${res.statusText}`);
+  }
 
-  const riskPercent = Math.round(Math.random() * 100);
+  const { risk } = (await res.json()) as ScoreResponse;
+
+  // null risk means the audio had no clear pitch — the agent re-explains and retries.
+  if (risk === null) {
+    console.log(`[model] Scored ${audio.length}-byte phonation → unclear (no pitch)`);
+    return { status: 'unclear' };
+  }
+
+  const riskPercent = Math.round(risk * 100);
+  const elevated = risk >= RISK_THRESHOLD;
   console.log(
-    `[model] (mock) Scored ${audio.length}-byte phonation in ${Math.round(delayMs)}ms → risk ${riskPercent}%`,
+    `[model] Scored ${audio.length}-byte phonation → risk ${riskPercent}% (elevated: ${elevated})`,
   );
 
-  return { riskPercent };
+  return { status: 'scored', riskPercent, elevated };
 }
