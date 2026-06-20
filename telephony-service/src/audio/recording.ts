@@ -1,5 +1,6 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { muLawToPcm } from './mulaw.js';
 
 /**
  * Development-only helper for saving captured phonation samples to disk so a
@@ -9,40 +10,48 @@ import path from 'node:path';
  * (true only when NODE_ENV === 'development'). Nothing here is part of the live
  * call flow; it is purely a local debugging aid.
  *
- * The captured audio is raw 8 kHz G.711 μ-law (Twilio's wire format). We wrap it
- * in a WAV container with format tag 7 (μ-law) so the file opens and plays in any
- * standard audio player without separate decoding.
+ * The captured audio is raw 8 kHz G.711 μ-law (Twilio's wire format). We DECODE
+ * it to 16-bit linear PCM and write a standard PCM WAV (format tag 1). Writing
+ * raw μ-law with format tag 7 is technically valid, but many players/tools don't
+ * honour tag 7 and render the μ-law bytes as harsh, glitchy noise — so the
+ * decoded PCM file is what actually plays back correctly everywhere.
  */
 
 /** Directory (relative to the service root) where dev recordings are written. */
 const RECORDINGS_DIR = 'recordings';
 
-const MULAW_FORMAT_TAG = 7;
+const PCM_FORMAT_TAG = 1; // linear PCM
 const SAMPLE_RATE_HZ = 8000;
 const NUM_CHANNELS = 1;
-const BITS_PER_SAMPLE = 8;
+const BITS_PER_SAMPLE = 16;
 
-/** Builds a minimal WAV (RIFF) container around raw μ-law audio bytes. */
+/** Decodes raw μ-law bytes to 16-bit PCM and wraps them in a standard WAV. */
 function wrapMuLawAsWav(audio: Buffer): Buffer {
+  // μ-law (1 byte/sample) -> linear PCM (2 bytes/sample).
+  const pcm = Buffer.alloc(audio.length * 2);
+  for (let i = 0; i < audio.length; i += 1) {
+    pcm.writeInt16LE(muLawToPcm(audio[i]), i * 2);
+  }
+
   const byteRate = (SAMPLE_RATE_HZ * NUM_CHANNELS * BITS_PER_SAMPLE) / 8;
   const blockAlign = (NUM_CHANNELS * BITS_PER_SAMPLE) / 8;
 
   const header = Buffer.alloc(44);
   header.write('RIFF', 0);
-  header.writeUInt32LE(36 + audio.length, 4);
+  header.writeUInt32LE(36 + pcm.length, 4);
   header.write('WAVE', 8);
   header.write('fmt ', 12);
   header.writeUInt32LE(16, 16); // fmt chunk size
-  header.writeUInt16LE(MULAW_FORMAT_TAG, 20);
+  header.writeUInt16LE(PCM_FORMAT_TAG, 20);
   header.writeUInt16LE(NUM_CHANNELS, 22);
   header.writeUInt32LE(SAMPLE_RATE_HZ, 24);
   header.writeUInt32LE(byteRate, 28);
   header.writeUInt16LE(blockAlign, 32);
   header.writeUInt16LE(BITS_PER_SAMPLE, 34);
   header.write('data', 36);
-  header.writeUInt32LE(audio.length, 40);
+  header.writeUInt32LE(pcm.length, 40);
 
-  return Buffer.concat([header, audio]);
+  return Buffer.concat([header, pcm]);
 }
 
 /**
