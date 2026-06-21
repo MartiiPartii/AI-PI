@@ -20,6 +20,15 @@ import type { Config } from '../config.js';
  */
 export type RiskLevel = 'low' | 'slightly_elevated' | 'elevated' | 'high';
 
+/**
+ * Probability at/above which a result is flagged as elevated risk. This is the
+ * binary decision persisted to the caller's web account, kept identical to the
+ * website's `RISK_THRESHOLD` (web/src/domain/risk.ts) so the phone line and the
+ * web self-test agree (MODEL_INTEGRATION.md). It is intentionally separate from
+ * the four-way spoken `RISK_BANDS` below, which only shape what the agent says.
+ */
+const RISK_THRESHOLD = 0.38;
+
 const RISK_BANDS: ReadonlyArray<{ readonly max: number; readonly level: RiskLevel }> = [
   { max: 0.4, level: 'low' },
   { max: 0.6, level: 'slightly_elevated' },
@@ -41,6 +50,8 @@ export type RiskAssessment =
       readonly riskPercent: number;
       /** Banded risk level the agent uses to decide what to say. */
       readonly level: RiskLevel;
+      /** Binary elevated-risk decision (risk ≥ threshold) persisted to the web account. */
+      readonly elevated: boolean;
     }
   | {
       /** No clear pitch (silence/noise/not a sustained vowel) — ask the caller to retry. */
@@ -85,9 +96,10 @@ export async function scorePhonation(
 
   const riskPercent = Math.round(risk * 100);
   const level = riskLevel(risk);
+  const elevated = risk >= RISK_THRESHOLD;
   console.log(
-    `[model] Scored ${audio.length}-byte phonation → risk ${riskPercent}% (${level})`,
+    `[model] Scored ${audio.length}-byte phonation → risk ${riskPercent}% (${level}, elevated=${elevated})`,
   );
 
-  return { status: 'scored', riskPercent, level };
+  return { status: 'scored', riskPercent, level, elevated };
 }
