@@ -44,6 +44,14 @@ export interface Config {
   readonly twilioTrialAccount: boolean;
   /** Base URL of the FastAPI model service that scores phonation samples. */
   readonly fastApiUrl: string;
+  /**
+   * Website endpoint that ingests scored results (e.g.
+   * "http://localhost:3000/api/results"). When set, scored results are POSTed
+   * here so the website can link them to an account and persist them.
+   */
+  readonly webResultsUrl: string;
+  /** Shared secret presented to the website's results endpoint (x-internal-secret). */
+  readonly internalApiSecret: string;
   /** How long (ms) to record the caller's sustained "ahhh" after the beep. */
   readonly captureDurationMs: number;
   /**
@@ -114,6 +122,8 @@ export function loadConfig(): Config {
   const smsFromNumber = process.env.TWILIO_SMS_FROM ?? '';
   const twilioTrialAccount = process.env.TWILIO_TRIAL_ACCOUNT === 'true';
   const fastApiUrl = process.env.FASTAPI_URL ?? 'http://localhost:8000';
+  const webResultsUrl = process.env.WEB_RESULTS_URL ?? '';
+  const internalApiSecret = process.env.INTERNAL_API_SECRET ?? '';
 
   const captureDurationMs = Number.parseInt(process.env.CAPTURE_DURATION_MS ?? '5000', 10);
   if (Number.isNaN(captureDurationMs) || captureDurationMs <= 0) {
@@ -138,6 +148,8 @@ export function loadConfig(): Config {
     smsFromNumber,
     twilioTrialAccount,
     fastApiUrl,
+    webResultsUrl,
+    internalApiSecret,
     captureDurationMs,
     saveRecordings,
   };

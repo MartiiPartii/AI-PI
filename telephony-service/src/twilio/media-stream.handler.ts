@@ -7,6 +7,7 @@ import { generateBeepFrames } from '../audio/beep.js';
 import { saveRecording } from '../audio/recording.js';
 import { scorePhonation } from '../model/risk-client.js';
 import { sendResultSms } from './sms.js';
+import { postResult } from '../web/results-client.js';
 
 /** Path Twilio's <Connect><Stream> connects to for bidirectional media. */
 export const MEDIA_STREAM_PATH = '/media-stream';
@@ -143,6 +144,13 @@ function handleConnection(twilioWs: WebSocket, config: Config): void {
           `[capture] Assessment done (risk ${assessment.riskPercent}%); attempting result SMS to ${callerNumber ?? '(none)'}`,
         );
         void sendResultSms(config, assessment, callerNumber, dialledNumber);
+        // Persist to the caller's web account if they have one. Best-effort,
+        // fire-and-forget: the website links it by phone number (or drops it if
+        // no account exists), and a failure here never affects the call/SMS.
+        void postResult(config, callerNumber, {
+          riskPercent: assessment.riskPercent,
+          elevated: assessment.elevated,
+        });
       } else {
         console.log('[capture] Result unclear; no SMS, agent will ask for a retry');
       }

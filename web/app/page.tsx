@@ -30,7 +30,15 @@ export default function LandingPage() {
               </span>
               <span className="text-lg">AI&#8209;PI</span>
             </a>
-            <CallButton size="sm" />
+            <div className="flex items-center gap-4">
+              <a
+                href="/login"
+                className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+              >
+                Вход
+              </a>
+              <CallButton size="sm" />
+            </div>
           </div>
         </Container>
       </header>

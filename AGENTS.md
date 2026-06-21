@@ -10,9 +10,11 @@ The risk model is trained on the [Oxford Parkinson's Disease Detection Dataset](
 
 The system is built as three independent services:
 
-1. **Website (Next.js)** — Public-facing site explaining the phone line and its purpose. Lets users create an account and associate it with their phone number. Provides a dashboard where users with an account can view their past assessment results.
+1. **Website (Next.js)** — Public-facing site explaining the phone line and its purpose. Lets users create an account (phone number + password) and provides a dashboard where they can view their past assessment results. Logged-in users can also take the voice screening **through the browser** (a web self-test: record a sustained "ahhh", which is scored by the model service and saved to their account) as an alternative to the phone line. **The website owns the shared database and is its sole reader/writer.**
 
-2. **Telephony service (Node.js)** — Handles all Twilio webhooks: receives inbound calls, runs the AI voice agent's conversation flow, captures the caller's voice input, sends it to the AI model service for scoring, relays the risk result back to the caller during the call, and triggers the results SMS via Twilio. Also responsible for looking up whether the caller's number has a registered account and, if so, writing the result to the database.
+   - **Auth:** accounts are keyed by phone number and secured with a password (argon2id hash) plus a signed, httpOnly session cookie. Phone-number verification (e.g. SMS OTP) is intended but not yet enabled; it will be added later.
+
+2. **Telephony service (Node.js)** — Handles all Twilio webhooks: receives inbound calls, runs the AI voice agent's conversation flow, captures the caller's voice input, sends it to the AI model service for scoring, relays the risk result back to the caller during the call, and triggers the results SMS via Twilio. After scoring, it **POSTs the result to the website's internal `/api/results` endpoint** (authenticated with a shared secret) so the website can link it to an account by phone number and persist it. The telephony service does **not** connect to the database directly.
 
 3. **AI model service (FastAPI)** — Hosts the trained Parkinson's risk prediction model. Exposes an endpoint that accepts voice-derived features and returns a risk assessment, which the Node.js service consumes during the call.
 
@@ -27,7 +29,11 @@ These services communicate over internal APIs and share a database for storing u
 5. The model returns a Parkinson's disease risk score/classification.
 6. The Node.js service has the AI agent relay the result to the caller, recommending a doctor's visit if risk is high.
 7. The Node.js service sends an SMS with the result summary via Twilio.
-8. If the caller's number matches a registered account, the result is stored in the database and becomes visible on the user's dashboard on the Next.js website.
+8. The telephony service POSTs the result to the website's internal `/api/results` endpoint. If the caller's number matches a registered account, the website stores it and it becomes visible on the user's dashboard; if not, nothing is persisted (the SMS is still sent).
+
+### Web self-test flow (alternative to the phone line)
+
+A logged-in website user can also be assessed without calling: they press a button, a 2-second countdown runs, the browser records ~5 seconds of sustained "ahhh", and the recording is sent to a Server Action which forwards it to the model service (`/score-wav`), applies the risk threshold, and saves the result to their account. The dashboard polls a cached, session-scoped results endpoint so new results (from either channel) appear in near real time.
 
 ## Tech Stack
 
@@ -35,7 +41,8 @@ These services communicate over internal APIs and share a database for storing u
 - **Telephony / orchestration:** Node.js — Twilio Voice (inbound calls) and Twilio Messaging (SMS), conversation logic for the AI voice agent
 - **AI / ML inference:** FastAPI (Python) — serves the trained risk-prediction model
 - **Training data:** Oxford Parkinson's Disease Detection Dataset (Kaggle)
-- **Database:** shared store for user accounts (phone number-linked) and assessment result history
+- **Database:** Postgres accessed via Prisma, owned solely by the website (schema + migrations live in `web/prisma`). Stores user accounts (phone-linked, password-hashed) and assessment result history. The telephony service reaches it only through the website's internal API.
+  - **AI model WAV endpoint:** the FastAPI service exposes `/score` (raw 8 kHz μ-law, for the phone line) and `/score-wav` (an uploaded WAV, for the web self-test); both return `{risk}`.
 
 ## Development Rules
 

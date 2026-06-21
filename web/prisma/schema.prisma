@@ -1,0 +1,48 @@
+// Prisma schema for the AI-PI website.
+//
+// The website owns the shared database (accounts + assessment results). The
+// telephony service does NOT connect to Postgres directly; it POSTs scored
+// results to the website's internal API, which is the sole writer/reader here.
+//
+// Accounts are keyed by phone number in E.164 form — the same value the
+// telephony service normalises a caller's number to — so a phone-line result
+// can be linked to a web account by phone alone.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Account {
+  id           String   @id @default(cuid())
+  /// Caller/account phone number, normalised to E.164 (unique join key).
+  phone        String   @unique
+  /// argon2id hash of the account password. Never expose this field.
+  passwordHash String   @map("password_hash")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  results Result[]
+
+  @@map("accounts")
+}
+
+model Result {
+  id          String   @id @default(cuid())
+  accountId   String   @map("account_id")
+  /// Parkinson's risk as a whole percentage 0..100 (model probability * 100).
+  riskPercent Int      @map("risk_percent")
+  /// App-side decision: risk >= 0.38 threshold (owned by the app, not the model).
+  elevated    Boolean
+  /// Where the assessment came from: "phone" (call) or "web" (self-test).
+  source      String   @default("web")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId, createdAt])
+  @@map("results")
+}

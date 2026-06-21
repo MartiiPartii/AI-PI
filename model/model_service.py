@@ -16,7 +16,7 @@ Run:  uvicorn model_service:app --port 8000
 import os
 import tempfile
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, File, Request, UploadFile
 from screen import load_model, mulaw_to_wav, screen_wav
 
 app = FastAPI(title="AI-PI voice-screening model service")
@@ -49,6 +49,32 @@ async def score(request: Request) -> dict:
         path = f.name
     try:
         mulaw_to_wav(mulaw_bytes, path)
+        risk = screen_wav(path, MODEL, FEATURES)
+    finally:
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+
+    return {"risk": risk}  # null when no clear pitch
+
+
+@app.post("/score-wav")
+async def score_wav(file: UploadFile = File(...)) -> dict:
+    """
+    Score an uploaded WAV file (multipart form field `file`).
+
+    Used by the website's self-test, where the browser records a WAV at the
+    device's native sample rate. `screen_wav` resamples to the model's native
+    8 kHz internally, so any sample rate is accepted. Same contract as /score:
+    {"risk": float in 0..1}, or {"risk": null} when the audio had no clear pitch.
+    """
+    wav_bytes = await file.read()
+
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+        path = f.name
+        f.write(wav_bytes)
+    try:
         risk = screen_wav(path, MODEL, FEATURES)
     finally:
         try:

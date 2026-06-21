@@ -13,7 +13,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="bg">
+    // suppressHydrationWarning: the inline script below adds `class="js"` to
+    // <html> before hydration (intentional progressive enhancement), an
+    // expected server/client attribute difference.
+    <html lang="bg" suppressHydrationWarning>
       <head>
         {/*
          * Mark that JS is active before first paint, so the scroll-reveal
