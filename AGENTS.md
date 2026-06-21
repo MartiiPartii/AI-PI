@@ -4,7 +4,7 @@
 
 This project is a phone-based early screening service for Parkinson's disease risk. Users call a dedicated phone number and speak with an AI voice agent, which guides them through a short voice-based assessment. A machine learning model analyzes the voice sample and produces a Parkinson's disease risk score. If the result indicates elevated risk, the agent advises the caller to see a doctor for a clinical diagnosis. After the call, the system sends the caller an SMS summarizing their result. If the caller's phone number is linked to a registered account on the companion website, the result is also saved to their account history for later viewing.
 
-The risk model is trained on the [Oxford Parkinson's Disease Detection Dataset](https://www.kaggle.com/datasets/pypiahmad/oxford-parkinsons-disease-detection-dataset) from Kaggle.
+The final risk model is trained on the [Italian Parkinson's Voice and Speech dataset](https://huggingface.co/datasets/birgermoell/Italian_Parkinsons_Voice_and_Speech), using the raw audio downsampled to 8 kHz and phone-degraded so it matches the 8 kHz G.711 audio Twilio actually delivers. We previously prototyped on the Oxford and Istanbul (Sakar) Parkinson's datasets but moved off them — see `HACKATHON.md` (Q7) for how each was used and why they were dropped.
 
 ## Architecture
 
@@ -34,7 +34,7 @@ These services communicate over internal APIs and share a database for storing u
 - **Frontend:** Next.js — info site, account creation, results dashboard
 - **Telephony / orchestration:** Node.js — Twilio Voice (inbound calls) and Twilio Messaging (SMS), conversation logic for the AI voice agent
 - **AI / ML inference:** FastAPI (Python) — serves the trained risk-prediction model
-- **Training data:** Oxford Parkinson's Disease Detection Dataset (Kaggle)
+- **Training data:** Italian Parkinson's Voice and Speech dataset (Hugging Face), 8 kHz + phone-degraded (earlier prototypes used the Oxford and Istanbul/Sakar datasets — dropped; see `HACKATHON.md` Q7)
 - **Database:** shared store for user accounts (phone number-linked) and assessment result history
 
 ## Development Rules
