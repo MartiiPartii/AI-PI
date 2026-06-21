@@ -1,4 +1,4 @@
-import { unstable_cache } from 'next/cache';
+import { unstable_cache, updateTag } from 'next/cache';
 import type { Result } from '@prisma/client';
 import { prisma } from './db';
 
@@ -20,6 +20,13 @@ import { prisma } from './db';
 /** Seconds a cached account list is reused before refreshing. */
 const RESULTS_TTL_SECONDS = 5;
 
+/** Cache tag for one account's results list; busted on delete (via `updateTag`,
+ *  which gives read-your-own-writes) so a removed result doesn't flash back from
+ *  the still-warm cache before the TTL expires. */
+function resultsTag(accountId: string): string {
+  return `results-by-account-${accountId}`;
+}
+
 /** Lists an account's results, newest first. Cached per account. */
 export function listResultsByAccount(accountId: string): Promise<Result[]> {
   const cached = unstable_cache(
@@ -29,12 +36,16 @@ export function listResultsByAccount(accountId: string): Promise<Result[]> {
         orderBy: { createdAt: 'desc' },
       }),
     ['results-by-account', accountId],
-    { revalidate: RESULTS_TTL_SECONDS },
+    { revalidate: RESULTS_TTL_SECONDS, tags: [resultsTag(accountId)] },
   );
   return cached();
 }
 
-/** Inserts a result row. */
+/** Inserts a result row.
+ *
+ * Note: no cache bust here. Inserts arrive both from a Server Action (web
+ * self-test) and a route handler (telephony POST); `updateTag` is Server-Action
+ * only, so insertions rely on the short TTL plus the UI's optimistic add. */
 export function insertResult(input: {
   accountId: string;
   riskPercent: number;
@@ -42,4 +53,26 @@ export function insertResult(input: {
   source: 'phone' | 'web';
 }): Promise<Result> {
   return prisma.result.create({ data: input });
+}
+
+/** Deletes a single result, scoped to its owning account so one user can never
+ *  delete another's row. Returns whether a row was actually removed.
+ *  Called only from a Server Action, so `updateTag` is valid here. */
+export async function deleteResultForAccount(
+  accountId: string,
+  id: string,
+): Promise<boolean> {
+  const { count } = await prisma.result.deleteMany({ where: { id, accountId } });
+  if (count > 0) updateTag(resultsTag(accountId));
+  return count > 0;
+}
+
+/** Deletes all of an account's results. Returns how many rows were removed.
+ *  Called only from a Server Action, so `updateTag` is valid here. */
+export async function deleteAllResultsForAccount(
+  accountId: string,
+): Promise<number> {
+  const { count } = await prisma.result.deleteMany({ where: { accountId } });
+  if (count > 0) updateTag(resultsTag(accountId));
+  return count;
 }

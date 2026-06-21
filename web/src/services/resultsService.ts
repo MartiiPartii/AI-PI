@@ -5,7 +5,12 @@ import type { ResultSource } from '@/domain/risk';
 import {
   findAccountByPhone,
 } from '@/external/accounts';
-import { insertResult, listResultsByAccount } from '@/external/results';
+import {
+  deleteAllResultsForAccount,
+  deleteResultForAccount,
+  insertResult,
+  listResultsByAccount,
+} from '@/external/results';
 import { toE164 } from '@/domain/phone';
 
 /** Maps a DB row to the serializable DTO sent to the client.
@@ -27,6 +32,20 @@ export function toResultDto(row: Result): ResultDto {
 export async function listForAccount(accountId: string): Promise<ResultDto[]> {
   const rows = await listResultsByAccount(accountId);
   return rows.map(toResultDto);
+}
+
+/** Deletes one of the account's results. Returns whether a row was removed
+ *  (false if the id doesn't exist or belongs to another account). */
+export function deleteForAccount(
+  accountId: string,
+  id: string,
+): Promise<boolean> {
+  return deleteResultForAccount(accountId, id);
+}
+
+/** Clears all of the account's results. Returns how many were removed. */
+export function clearForAccount(accountId: string): Promise<number> {
+  return deleteAllResultsForAccount(accountId);
 }
 
 /**

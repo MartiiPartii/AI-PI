@@ -28,3 +28,10 @@ export const IngestResultSchema = z.object({
 });
 
 export type IngestResultInput = z.infer<typeof IngestResultSchema>;
+
+/** Identifies a single result to delete (ownership is enforced server-side). */
+export const DeleteResultSchema = z.object({
+  id: z.string().min(1),
+});
+
+export type DeleteResultInput = z.infer<typeof DeleteResultSchema>;

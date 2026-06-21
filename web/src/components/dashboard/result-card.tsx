@@ -1,5 +1,6 @@
-import { Phone, Mic } from 'lucide-react';
+import { Phone, Mic, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import type { ResultDto } from '@/schemas/result';
 import { riskLabel, sourceLabel } from '@/domain/risk';
@@ -8,6 +9,9 @@ import { riskLabel, sourceLabel } from '@/domain/risk';
  * Presentational card for a single assessment result. No data fetching or
  * logic; it just renders a DTO. Dates are formatted in the Europe/Sofia time
  * zone so server and client render identically (no hydration mismatch).
+ *
+ * When `onDelete` is supplied, a delete control is shown; the parent owns the
+ * actual deletion and optimistic update.
  */
 const dateFormatter = new Intl.DateTimeFormat('bg-BG', {
   day: 'numeric',
@@ -18,7 +22,13 @@ const dateFormatter = new Intl.DateTimeFormat('bg-BG', {
   timeZone: 'Europe/Sofia',
 });
 
-export function ResultCard({ result }: { result: ResultDto }) {
+export function ResultCard({
+  result,
+  onDelete,
+}: {
+  result: ResultDto;
+  onDelete?: (id: string) => void;
+}) {
   const SourceIcon = result.source === 'phone' ? Phone : Mic;
 
   return (
@@ -44,10 +54,24 @@ export function ResultCard({ result }: { result: ResultDto }) {
           </p>
         </div>
 
-        <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
-          <SourceIcon className="size-4" aria-hidden />
-          {sourceLabel(result.source)}
-        </span>
+        <div className="flex shrink-0 items-center gap-3">
+          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <SourceIcon className="size-4" aria-hidden />
+            {sourceLabel(result.source)}
+          </span>
+
+          {onDelete ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-8 text-muted-foreground hover:text-destructive"
+              aria-label="Изтрий резултата"
+              onClick={() => onDelete(result.id)}
+            >
+              <Trash2 className="size-4" aria-hidden />
+            </Button>
+          ) : null}
+        </div>
       </CardContent>
     </Card>
   );

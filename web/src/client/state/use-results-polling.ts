@@ -38,6 +38,17 @@ export function useResultsPolling(initial: ResultDto[]) {
     );
   }, []);
 
+  /** Optimistically drop a result by id (after a delete); the next poll
+   *  reconciles with the server. */
+  const removeResult = useCallback((id: string) => {
+    setResults((prev) => prev.filter((r) => r.id !== id));
+  }, []);
+
+  /** Optimistically clear the whole list (after "clear all"). */
+  const clearResults = useCallback(() => {
+    setResults([]);
+  }, []);
+
   useEffect(() => {
     const controller = new AbortController();
 
@@ -71,5 +82,5 @@ export function useResultsPolling(initial: ResultDto[]) {
     };
   }, [refresh]);
 
-  return { results, refresh, addResult };
+  return { results, refresh, addResult, removeResult, clearResults };
 }
