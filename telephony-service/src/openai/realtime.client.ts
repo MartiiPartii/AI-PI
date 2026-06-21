@@ -46,15 +46,6 @@ export interface RealtimeSession {
 const MAX_PENDING_FRAMES = 1000;
 
 /**
- * Minimum non-whitespace transcript length to treat a VAD-detected turn as
- * real caller speech rather than a noise/line-blip false positive (e.g. a
- * stray "Is" picked up from background sound). Short enough not to block
- * genuine one-word replies like "Да" (yes), long enough to reject single
- * stray characters.
- */
-const MIN_MEANINGFUL_TRANSCRIPT_LENGTH = 2;
-
-/**
  * Opens a connection to OpenAI's GPT Realtime API (speech-to-speech, GA
  * interface) and wires it to the supplied callbacks.
  *
@@ -105,11 +96,6 @@ export function createRealtimeSession(config: Config, callbacks: RealtimeCallbac
           audio: {
             input: {
               format: { type: 'audio/pcmu' },
-              // Phone audio picks up a lot of room/line noise before it ever
-              // reaches the model; far_field is tuned for exactly this
-              // (mic far from the speaker, background chatter) and suppresses
-              // it before VAD and transcription see it.
-              noise_reduction: { type: 'far_field' },
               turn_detection: {
                 // Semantic VAD judges turn completion from speech content rather
                 // than a fixed silence timer — better for elderly callers who
@@ -230,12 +216,6 @@ export function createRealtimeSession(config: Config, callbacks: RealtimeCallbac
       case 'conversation.item.input_audio_transcription.completed': {
         const transcript = event.transcript?.trim() ?? '';
         console.log(`[openai] Caller said: ${transcript}`);
-        if (transcript.length < MIN_MEANINGFUL_TRANSCRIPT_LENGTH) {
-          // Treat as a noise/line-blip false positive: ignore it entirely,
-          // leave any in-progress agent response playing uninterrupted.
-          console.log('[openai] Ignoring transcript as noise (too short)');
-          break;
-        }
         if (responseActive) {
           ws.send(JSON.stringify({ type: 'response.cancel' }));
           responseActive = false;

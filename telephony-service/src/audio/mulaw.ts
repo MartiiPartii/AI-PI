@@ -1,10 +1,8 @@
 /**
- * Helpers for analysing inbound G.711 μ-law audio (Twilio's wire format).
+ * Helpers for decoding inbound G.711 μ-law audio (Twilio's wire format).
  *
- * Used by the phonation capture to detect when the caller actually starts
- * saying "ahhh" so the fixed-length recording window can begin at voice onset
- * rather than at the beep — otherwise the caller's reaction time shows up as
- * leading silence and the held vowel gets clipped at the end.
+ * Used by the phonation recording to convert the captured μ-law sample to
+ * 16-bit linear PCM before scoring.
  */
 
 /**
@@ -20,21 +18,4 @@ export function muLawToPcm(muLawByte: number): number {
   let sample = ((mantissa << 3) + BIAS) << exponent;
   sample -= BIAS;
   return sign ? -sample : sample;
-}
-
-/**
- * Root-mean-square amplitude of a μ-law audio frame, in linear PCM units
- * (0..~32635). Higher means louder; near-silence/line-noise sits low, while a
- * sustained vowel sits well above it — so a simple threshold separates them.
- */
-export function frameRms(frame: Buffer): number {
-  if (frame.length === 0) {
-    return 0;
-  }
-  let sumSquares = 0;
-  for (let i = 0; i < frame.length; i += 1) {
-    const pcm = muLawToPcm(frame[i]);
-    sumSquares += pcm * pcm;
-  }
-  return Math.sqrt(sumSquares / frame.length);
 }

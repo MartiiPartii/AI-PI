@@ -5,7 +5,6 @@ import type { Config } from '../config.js';
 import { createRealtimeSession } from '../openai/realtime.client.js';
 import { generateBeepFrames } from '../audio/beep.js';
 import { saveRecording } from '../audio/recording.js';
-import { frameRms } from '../audio/mulaw.js';
 import { scorePhonation } from '../model/risk-client.js';
 import { sendResultSms } from './sms.js';
 
@@ -21,33 +20,8 @@ const BEEP_DONE_MARK = 'beep-done';
 /** Pre-rendered start-beep frames (format is call-independent, so build once). */
 const BEEP_FRAMES = generateBeepFrames();
 
-/**
- * RMS amplitude (linear PCM units) a frame must exceed to count as voiced. Line
- * noise and silence sit well below this; a sustained "ahhh" sits well above it.
- */
-const VOICE_ONSET_RMS = 800;
-
-/**
- * Consecutive voiced frames required to confirm onset (~60 ms at 20 ms/frame).
- * Avoids triggering on a single click or line pop.
- */
-const VOICE_ONSET_FRAMES = 3;
-
-/**
- * How many recent frames to keep as pre-roll before the detected onset (~100 ms
- * at 20 ms/frame), so the very start of the vowel isn't clipped.
- */
-const ONSET_PREROLL_FRAMES = 5;
-
-/**
- * Max time to wait for the caller to start phonating after the beep. If they
- * never do (silence, confusion), we record from here anyway so the agent still
- * gets a result and can re-explain.
- */
-const ONSET_TIMEOUT_MS = 8000;
-
 /** Phase of the phonation capture for a single call. */
-type CapturePhase = 'idle' | 'waiting' | 'recording';
+type CapturePhase = 'idle' | 'recording';
 
 /**
  * Attaches a WebSocket server for Twilio Media Streams to the HTTP server.
@@ -78,17 +52,13 @@ function handleConnection(twilioWs: WebSocket, config: Config): void {
 
   // Phonation-capture state. The capture runs as a small phase machine:
   //   idle      → not capturing; caller audio flows to the model as normal.
-  //   waiting   → beep finished; watching inbound audio for voice onset. Frames
-  //               are kept as pre-roll but the fixed window hasn't started yet.
-  //   recording → onset detected (or wait timed out); buffering the sustained
-  //               vowel for `captureDurationMs` from the actual start.
-  // Throughout waiting/recording, caller audio is withheld from the model so the
-  // Realtime VAD doesn't react to the "ahhh". `captureCallId` is the tool call
-  // we must answer with the score.
+  //   recording → beep finished; buffering the sustained vowel for
+  //               `captureDurationMs` from the moment the beep ends.
+  // While recording, caller audio is withheld from the model so the Realtime VAD
+  // doesn't react to the "ahhh". `captureCallId` is the tool call we must answer
+  // with the score.
   let capturePhase: CapturePhase = 'idle';
   let captureChunks: Buffer[] = [];
-  let preRoll: Buffer[] = [];
-  let voicedRun = 0;
   let captureCallId: string | null = null;
   let captureTimer: NodeJS.Timeout | null = null;
 
@@ -105,8 +75,6 @@ function handleConnection(twilioWs: WebSocket, config: Config): void {
     }
     capturePhase = 'idle';
     captureChunks = [];
-    preRoll = [];
-    voicedRun = 0;
     captureCallId = null;
   }
 
@@ -121,62 +89,29 @@ function handleConnection(twilioWs: WebSocket, config: Config): void {
     twilioWs.send(JSON.stringify({ event: 'mark', streamSid, mark: { name: BEEP_DONE_MARK } }));
   }
 
-  /** Begins watching inbound audio for the caller to start phonating. */
-  function startWaitingForOnset(): void {
-    capturePhase = 'waiting';
-    captureChunks = [];
-    preRoll = [];
-    voicedRun = 0;
-    console.log('[capture] Beep done; waiting for voice onset');
-    // Safety net: if the caller never starts, record from here anyway so the
-    // agent still gets a (likely silent) result and can re-explain.
-    captureTimer = setTimeout(() => {
-      console.warn('[capture] Voice onset not detected; recording anyway');
-      startRecording();
-    }, ONSET_TIMEOUT_MS);
-  }
-
-  /** Opens the fixed-length recording window, seeded with the onset pre-roll. */
+  /** Opens the fixed-length recording window as soon as the beep finishes. */
   function startRecording(): void {
     if (captureTimer) {
       clearTimeout(captureTimer);
       captureTimer = null;
     }
     capturePhase = 'recording';
-    captureChunks = preRoll;
-    preRoll = [];
-    console.log(`[capture] Voice onset; recording phonation for ${config.captureDurationMs}ms`);
+    captureChunks = [];
+    console.log(`[capture] Beep done; recording phonation for ${config.captureDurationMs}ms`);
     captureTimer = setTimeout(() => {
       void finishCapture();
     }, config.captureDurationMs);
   }
 
-  /**
-   * Handles one inbound caller frame while a capture is active: detects onset
-   * during `waiting`, and accumulates the sample during `recording`.
-   */
+  /** Accumulates one inbound caller frame while a capture is recording. */
   function handleCaptureFrame(frame: Buffer): void {
-    if (capturePhase === 'recording') {
-      captureChunks.push(frame);
-      return;
-    }
-    // waiting: keep a short rolling pre-roll and look for sustained voiced audio.
-    preRoll.push(frame);
-    if (preRoll.length > ONSET_PREROLL_FRAMES) {
-      preRoll.shift();
-    }
-    voicedRun = frameRms(frame) >= VOICE_ONSET_RMS ? voicedRun + 1 : 0;
-    if (voicedRun >= VOICE_ONSET_FRAMES) {
-      startRecording();
-    }
+    captureChunks.push(frame);
   }
 
   /** Closes the recording window, scores the sample, and returns it to the agent. */
   async function finishCapture(): Promise<void> {
     capturePhase = 'idle';
     captureTimer = null;
-    voicedRun = 0;
-    preRoll = [];
     const callId = captureCallId;
     captureCallId = null;
 
@@ -234,9 +169,7 @@ function handleConnection(twilioWs: WebSocket, config: Config): void {
     onBeginCapture(callId) {
       // Agent finished instructing the caller and wants the sample. Remember the
       // tool call to answer, then play the beep. When Twilio echoes the beep-done
-      // mark we start watching for voice onset, and the fixed recording window
-      // begins only once the caller actually starts phonating — so their
-      // reaction-time silence doesn't eat into (and clip) the sample.
+      // mark we begin the fixed-length recording window immediately.
       captureCallId = callId;
       playBeep();
     },
@@ -304,8 +237,8 @@ function handleConnection(twilioWs: WebSocket, config: Config): void {
           realtime.close();
           void endCall(config, callSid, twilioWs);
         } else if (msg.mark?.name === BEEP_DONE_MARK) {
-          // The beep has finished playing — start listening for voice onset.
-          startWaitingForOnset();
+          // The beep has finished playing — start recording the phonation.
+          startRecording();
         }
         break;
       case 'stop':
