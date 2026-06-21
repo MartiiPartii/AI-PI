@@ -68,7 +68,7 @@ def screen_wav(wav_path, model, features):
     # jitter/shimmer, high HNR) score high on class 1, disordered (PD-like)
     # voices score low. So Parkinson's RISK is P(class 0), not P(class 1).
     proba = model.predict_proba(row)[0]
-    pd_index = list(model.classes_).index(1)
+    pd_index = list(model.classes_).index(0)
     return float(proba[pd_index])
 
 
