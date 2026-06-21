@@ -12,10 +12,25 @@ import type { Config } from '../config.js';
  */
 
 /**
- * Decision threshold on the model's risk probability. risk ≥ this → elevated.
- * Tuned to favour recall (catch more true cases). Owned by the app, not the model.
+ * Banded risk level the agent relays, instead of a single elevated/not flag.
+ * The middle "slightly_elevated" band is deliberately hedged: a phone call can
+ * distort the voice enough to nudge a healthy speaker into the 40–60% range, so
+ * it is treated as borderline, not a confident positive. Owned by the app, not
+ * the model. Cutoffs are on the risk fraction (0..1).
  */
-const RISK_THRESHOLD = 0.38;
+export type RiskLevel = 'low' | 'slightly_elevated' | 'elevated' | 'high';
+
+const RISK_BANDS: ReadonlyArray<{ readonly max: number; readonly level: RiskLevel }> = [
+  { max: 0.4, level: 'low' },
+  { max: 0.6, level: 'slightly_elevated' },
+  { max: 0.8, level: 'elevated' },
+  { max: Infinity, level: 'high' },
+];
+
+/** Maps a 0..1 risk probability to its band. */
+function riskLevel(risk: number): RiskLevel {
+  return RISK_BANDS.find((band) => risk < band.max)!.level;
+}
 
 /** Result of scoring a phonation sample, as handed to the agent to relay. */
 export type RiskAssessment =
@@ -24,8 +39,8 @@ export type RiskAssessment =
       readonly status: 'scored';
       /** Parkinson's risk as a percentage, 0–100. */
       readonly riskPercent: number;
-      /** Whether the risk is at/above the decision threshold (app-side decision). */
-      readonly elevated: boolean;
+      /** Banded risk level the agent uses to decide what to say. */
+      readonly level: RiskLevel;
     }
   | {
       /** No clear pitch (silence/noise/not a sustained vowel) — ask the caller to retry. */
@@ -69,10 +84,10 @@ export async function scorePhonation(
   }
 
   const riskPercent = Math.round(risk * 100);
-  const elevated = risk >= RISK_THRESHOLD;
+  const level = riskLevel(risk);
   console.log(
-    `[model] Scored ${audio.length}-byte phonation → risk ${riskPercent}% (elevated: ${elevated})`,
+    `[model] Scored ${audio.length}-byte phonation → risk ${riskPercent}% (${level})`,
   );
 
-  return { status: 'scored', riskPercent, elevated };
+  return { status: 'scored', riskPercent, level };
 }
