@@ -12,10 +12,10 @@
 - **Team name:** AI-PI
 - **Repo:** https://github.com/MartiiPartii/AI-PI
 - **Members (name — what each person did):**
-  <!-- TODO: replace the GitHub handles with real names -->
-  - **@MartiiPartii** — telephony service (Twilio + OpenAI Realtime voice agent), web app, SMS, deployment.
-  - **@Yoshitd** — ML model (training, phone-degradation, evaluation) and model service integration.
-- **How did you split the tasks? Who did what?:** We split along the three services: one of us owned the **conversational telephony layer** (the Node voice agent, Twilio call flow, SMS, and the Next.js site), the other owned the **ML model** (feature extraction, training on phone-degraded audio, subject-wise evaluation) and the **FastAPI scoring service** that connects the two.
+  - Marti — telephony service (Twilio + OpenAI Realtime voice agent), web app, SMS, deployment.
+  - Yoshi — ML model (training, phone-degradation, evaluation) and model service integration.
+  - Stani — research, idea forming, business plan and structure, and presentation.
+- **How did you split the tasks? Who did what?:** We split along the three pillars: Marti owned the **conversational telephony layer** (the Node voice agent, Twilio call flow, SMS, and the Next.js site), Yoshi owned the **ML model** (feature extraction, training on phone-degraded audio, subject-wise evaluation) and the **FastAPI scoring service** that connects the two, and Stani owned the **research, idea shaping, and business/presentation** side.
 
 ---
 
