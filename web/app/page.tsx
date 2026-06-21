@@ -1,4 +1,5 @@
 import { Activity, HeartPulse, Mic, Phone } from "lucide-react";
+import { AuthNav } from "@/components/auth-nav";
 import { CallButton } from "@/components/call-button";
 import { Reveal } from "@/components/motion/reveal";
 import { Card, CardContent } from "@/components/ui/card";
@@ -31,12 +32,7 @@ export default function LandingPage() {
               <span className="text-lg">AI&#8209;PI</span>
             </a>
             <div className="flex items-center gap-4">
-              <a
-                href="/login"
-                className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-              >
-                Вход
-              </a>
+              <AuthNav />
               <CallButton size="sm" />
             </div>
           </div>

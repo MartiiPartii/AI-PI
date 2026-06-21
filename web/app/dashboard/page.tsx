@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { HeartPulse, LogOut } from 'lucide-react';
 import { logoutAction } from '@/actions/auth';
-import { getAuthenticatedAccountId } from '@/services/sessionService';
+import { getSessionAccountId } from '@/services/sessionService';
 import { listForAccount } from '@/services/resultsService';
 import { Button } from '@/components/ui/button';
 import { DashboardClient } from '@/components/dashboard/dashboard-client';
@@ -13,9 +13,10 @@ export const metadata = { title: 'Моите резултати — AI-PI' };
 export const dynamic = 'force-dynamic';
 
 export default async function DashboardPage() {
-  // Defence in depth: middleware guards this route, but we still derive the
-  // account from the session here and scope every query to it.
-  const accountId = await getAuthenticatedAccountId();
+  // Defence in depth: the proxy guards this route, but we still derive the
+  // account from the session here (same signature-based check as the proxy, so
+  // no redirect loop) and scope every query to it.
+  const accountId = await getSessionAccountId();
   if (!accountId) {
     redirect('/login');
   }

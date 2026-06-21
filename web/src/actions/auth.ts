@@ -2,6 +2,7 @@
 
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
+import { revalidatePath } from 'next/cache';
 import type { ApiResponse } from '@/schemas/api';
 import { LoginSchema, SignupSchema } from '@/schemas/auth';
 import { login, signup } from '@/services/authService';
@@ -47,6 +48,9 @@ export async function signupAction(
   }
 
   await startSession(result.data.accountId);
+  // Invalidate cached RSC so the nav and dashboard reflect the new session
+  // immediately (no manual refresh needed).
+  revalidatePath('/', 'layout');
   redirect('/dashboard');
 }
 
@@ -68,10 +72,13 @@ export async function loginAction(input: unknown): Promise<ApiResponse<null>> {
   }
 
   await startSession(result.data.accountId);
+  revalidatePath('/', 'layout');
   redirect('/dashboard');
 }
 
 export async function logoutAction(): Promise<void> {
   await endSession();
+  // Invalidate cached RSC so the nav drops the signed-in links everywhere.
+  revalidatePath('/', 'layout');
   redirect('/login');
 }
